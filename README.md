@@ -10,7 +10,7 @@
 
 # Introduction
 
-An fast, thread-safe implementation of Priority Queue in Golang
+A fast, thread-safe implementation of Priority Queue in Golang
 
 # Get started
 
