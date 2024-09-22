@@ -8,7 +8,8 @@
 [![Codacy Badge](https://app.codacy.com/project/badge/Coverage/2fe10924ab114a08bbbab5d583fd610c)](https://www.codacy.com/gh/xybor-x/priority_queue/dashboard?utm_source=github.com&utm_medium=referral&utm_content=xybor-x/priority_queue&utm_campaign=Badge_Grade)
 [![Go Report](https://goreportcard.com/badge/github.com/xybor-x/priority_queue)](https://goreportcard.com/report/github.com/xybor-x/priority_queue)
 
-# Introduction[![Codacy Badge]
+# Introduction
+
 An fast, thread-safe implementation of Priority Queue in Golang
 
 # Get started
