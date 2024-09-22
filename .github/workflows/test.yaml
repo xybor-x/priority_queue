@@ -30,5 +30,5 @@ jobs:
         CODACY_API_TOKEN: ${{ secrets.CODACY_API_TOKEN }}
         CODACY_ORGANIZATION_PROVIDER: gh
         CODACY_USERNAME: xybor-x
-        CODACY_PROJECT_NAME: xyconfig
+        CODACY_PROJECT_NAME: priority_queue
       run: bash <(curl -Ls https://coverage.codacy.com/get.sh) report --force-coverage-parser go -r cover.out
