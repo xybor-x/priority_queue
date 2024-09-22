@@ -1,6 +1,6 @@
 module github.com/xybor-x/priority_queue
 
-go 1.23.0
+go 1.23.1
 
 require github.com/stretchr/testify v1.9.0
 

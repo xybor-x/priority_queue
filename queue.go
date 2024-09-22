@@ -7,10 +7,15 @@ import (
 	"time"
 )
 
+type WaitResult[T any] struct {
+	Value T
+	Err   error
+}
+
 // Queuer represents for a thread-safe queue.
 type Queuer[T any] interface {
 	// Enqueue push an element into the queue.
-	Enqueue(obj T) error
+	Enqueue(obj ...T) error
 
 	// DequeueIf returns and removes the element at the begining of the queue if
 	// the element meets the condition. This function is non-blocking.
@@ -46,7 +51,11 @@ type Queuer[T any] interface {
 	//			return time.After(time.Since(t))
 	// 		}
 	// 	)
-	WaitDequeueIf(ctx context.Context, f func(t T) (bool, error), retrigger func(T) <-chan time.Time) (T, error)
+	WaitDequeueIf(
+		ctx context.Context,
+		cond func(t T) (bool, error),
+		retrigger func(T) <-chan time.Time,
+	) (T, error)
 
 	// WaitDequeue is the same as Dequeue, but this function is blocking.
 	WaitDequeue(ctx context.Context) (T, error)
@@ -65,35 +74,35 @@ type Queuer[T any] interface {
 }
 
 // DefaultQueue implementation.
-var _ Queuer[int] = (*DefaultQueue[int])(nil)
+var _ Queuer[int] = (*Queue[int])(nil)
 
-type DefaultQueue[T any] struct {
+type Queue[T any] struct {
 	mutex sync.RWMutex
 	queue []T
 
-	dequeueC chan any
+	wakeupCh chan any
 }
 
-func NewDefaultQueue[T any]() *DefaultQueue[T] {
-	return &DefaultQueue[T]{
+func NewQueue[T any]() *Queue[T] {
+	return &Queue[T]{
 		mutex:    sync.RWMutex{},
 		queue:    make([]T, 0),
-		dequeueC: make(chan any),
+		wakeupCh: make(chan any),
 	}
 }
 
-func (q *DefaultQueue[T]) Enqueue(obj T) error {
+func (q *Queue[T]) Enqueue(obj ...T) error {
 	q.mutex.Lock()
 	defer func() {
 		q.mutex.Unlock()
 		q.wakeupAWaitingDequeue()
 	}()
 
-	q.queue = append(q.queue, obj)
+	q.queue = append(q.queue, obj...)
 	return nil
 }
 
-func (q *DefaultQueue[T]) DequeueIf(cond func(t T) (bool, error)) (T, error) {
+func (q *Queue[T]) DequeueIf(cond func(t T) (bool, error)) (T, error) {
 	q.mutex.Lock()
 	defer q.mutex.Unlock()
 
@@ -119,15 +128,16 @@ func (q *DefaultQueue[T]) DequeueIf(cond func(t T) (bool, error)) (T, error) {
 	return v, nil
 }
 
-func (q *DefaultQueue[T]) Dequeue() (T, error) {
+func (q *Queue[T]) Dequeue() (T, error) {
 	return q.DequeueIf(nil)
 }
 
-func (q *DefaultQueue[T]) WaitDequeueIf(
+func (q *Queue[T]) WaitDequeueIf(
 	ctx context.Context,
 	cond func(t T) (bool, error),
 	retrigger func(T) <-chan time.Time,
 ) (T, error) {
+
 	for {
 		t, err := q.DequeueIf(cond)
 		if !errors.Is(err, ErrEmpty) && !errors.Is(err, ErrNotMeetCondition) {
@@ -154,11 +164,11 @@ func (q *DefaultQueue[T]) WaitDequeueIf(
 	}
 }
 
-func (q *DefaultQueue[T]) WaitDequeue(ctx context.Context) (T, error) {
+func (q *Queue[T]) WaitDequeue(ctx context.Context) (T, error) {
 	return q.WaitDequeueIf(ctx, nil, nil)
 }
 
-func (q *DefaultQueue[T]) Front() (T, error) {
+func (q *Queue[T]) Front() (T, error) {
 	q.mutex.RLock()
 	defer q.mutex.RUnlock()
 
@@ -170,7 +180,7 @@ func (q *DefaultQueue[T]) Front() (T, error) {
 	return q.queue[0], nil
 }
 
-func (q *DefaultQueue[T]) Back() (T, error) {
+func (q *Queue[T]) Back() (T, error) {
 	q.mutex.RLock()
 	defer q.mutex.RUnlock()
 
@@ -182,30 +192,30 @@ func (q *DefaultQueue[T]) Back() (T, error) {
 	return q.queue[len(q.queue)-1], nil
 }
 
-func (q *DefaultQueue[T]) Clear() {
+func (q *Queue[T]) Clear() {
 	q.mutex.Lock()
 	defer q.mutex.Unlock()
 
 	q.queue = make([]T, 0)
 }
 
-func (q *DefaultQueue[T]) Length() int {
+func (q *Queue[T]) Length() int {
 	q.mutex.RLock()
 	defer q.mutex.RUnlock()
 
 	return len(q.queue)
 }
 
-func (q *DefaultQueue[T]) wakeupAWaitingDequeue() {
+func (q *Queue[T]) wakeupAWaitingDequeue() {
 	select {
-	case <-q.dequeueC:
+	case q.wakeupCh <- nil:
 	default:
 	}
 }
 
-func (q *DefaultQueue[T]) sleepUntilBeWokenUp(ctx context.Context) bool {
+func (q *Queue[T]) sleepUntilBeWokenUp(ctx context.Context) bool {
 	select {
-	case q.dequeueC <- nil:
+	case <-q.wakeupCh:
 		return true
 	case <-ctx.Done():
 		return false

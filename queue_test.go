@@ -12,8 +12,8 @@ import (
 	priorityqueue "github.com/xybor-x/priority_queue"
 )
 
-func Test_DefaultQueue_Normal(t *testing.T) {
-	queue := priorityqueue.NewDefaultQueue[int]()
+func Test_Queue_Normal(t *testing.T) {
+	queue := priorityqueue.NewQueue[int]()
 	assert.NoError(t, queue.Enqueue(1))
 	assert.NoError(t, queue.Enqueue(2))
 	assert.NoError(t, queue.Enqueue(3))
@@ -34,8 +34,8 @@ func Test_DefaultQueue_Normal(t *testing.T) {
 	assert.ErrorIs(t, err, priorityqueue.ErrEmpty)
 }
 
-func Test_DefaultQueue_FrontAndBackInNonEmptyQueue(t *testing.T) {
-	queue := priorityqueue.NewDefaultQueue[int]()
+func Test_Queue_FrontAndBackInNonEmptyQueue(t *testing.T) {
+	queue := priorityqueue.NewQueue[int]()
 	assert.NoError(t, queue.Enqueue(1))
 	assert.NoError(t, queue.Enqueue(2))
 	assert.NoError(t, queue.Enqueue(3))
@@ -49,8 +49,8 @@ func Test_DefaultQueue_FrontAndBackInNonEmptyQueue(t *testing.T) {
 	assert.Equal(t, 3, v)
 }
 
-func Test_DefaultQueue_FrontAndBackInEmptyQueue(t *testing.T) {
-	queue := priorityqueue.NewDefaultQueue[int]()
+func Test_Queue_FrontAndBackInEmptyQueue(t *testing.T) {
+	queue := priorityqueue.NewQueue[int]()
 
 	_, err := queue.Front()
 	assert.ErrorIs(t, err, priorityqueue.ErrEmpty)
@@ -59,8 +59,8 @@ func Test_DefaultQueue_FrontAndBackInEmptyQueue(t *testing.T) {
 	assert.ErrorIs(t, err, priorityqueue.ErrEmpty)
 }
 
-func Test_DefaultQueue_LengthAndClearQueue(t *testing.T) {
-	queue := priorityqueue.NewDefaultQueue[int]()
+func Test_Queue_LengthAndClearQueue(t *testing.T) {
+	queue := priorityqueue.NewQueue[int]()
 	assert.NoError(t, queue.Enqueue(1))
 	assert.NoError(t, queue.Enqueue(2))
 	assert.NoError(t, queue.Enqueue(3))
@@ -72,8 +72,8 @@ func Test_DefaultQueue_LengthAndClearQueue(t *testing.T) {
 	assert.Equal(t, 0, queue.Length())
 }
 
-func Test_DefaultQueue_WaitDequeue(t *testing.T) {
-	queue := priorityqueue.NewDefaultQueue[int]()
+func Test_Queue_WaitDequeue(t *testing.T) {
+	queue := priorityqueue.NewQueue[int]()
 	assert.NoError(t, queue.Enqueue(1))
 	assert.NoError(t, queue.Enqueue(2))
 	assert.NoError(t, queue.Enqueue(3))
@@ -98,8 +98,8 @@ func Test_DefaultQueue_WaitDequeue(t *testing.T) {
 	assert.ErrorIs(t, err, priorityqueue.ErrTimeout)
 }
 
-func Test_DefaultQueue_DequeueIfFail(t *testing.T) {
-	queue := priorityqueue.NewDefaultQueue[int]()
+func Test_Queue_DequeueIfFail(t *testing.T) {
+	queue := priorityqueue.NewQueue[int]()
 	assert.NoError(t, queue.Enqueue(1))
 
 	v, err := queue.DequeueIf(func(t int) (bool, error) { return false, nil })
@@ -107,8 +107,8 @@ func Test_DefaultQueue_DequeueIfFail(t *testing.T) {
 	assert.Equal(t, 1, v)
 }
 
-func Test_DefaultQueue_DequeueIfError(t *testing.T) {
-	queue := priorityqueue.NewDefaultQueue[int]()
+func Test_Queue_DequeueIfError(t *testing.T) {
+	queue := priorityqueue.NewQueue[int]()
 	assert.NoError(t, queue.Enqueue(1))
 
 	expectedErr := errors.New("wrong")
@@ -117,8 +117,8 @@ func Test_DefaultQueue_DequeueIfError(t *testing.T) {
 	assert.ErrorIs(t, err, expectedErr)
 }
 
-func Test_DefaultQueue_EnqueueAfterWaitDequeue(t *testing.T) {
-	queue := priorityqueue.NewDefaultQueue[int]()
+func Test_Queue_EnqueueAfterWaitDequeue(t *testing.T) {
+	queue := priorityqueue.NewQueue[int]()
 	assert.NoError(t, queue.Enqueue(1))
 
 	v, err := queue.WaitDequeue(context.Background())
@@ -139,8 +139,8 @@ func Test_DefaultQueue_EnqueueAfterWaitDequeue(t *testing.T) {
 	assert.Equal(t, 2, v)
 }
 
-func Test_DefaultQueue_MultipleWaitDequeue(t *testing.T) {
-	queue := priorityqueue.NewDefaultQueue[int]()
+func Test_Queue_MultipleWaitDequeue(t *testing.T) {
+	queue := priorityqueue.NewQueue[int]()
 
 	go func() {
 		time.Sleep(500 * time.Millisecond)
@@ -176,8 +176,8 @@ func Test_DefaultQueue_MultipleWaitDequeue(t *testing.T) {
 	assert.Equal(t, int32(1), totalSuccess)
 }
 
-func Test_DefaultQueue_DequeueIf(t *testing.T) {
-	queue := priorityqueue.NewDefaultQueue[int]()
+func Test_Queue_DequeueIf(t *testing.T) {
+	queue := priorityqueue.NewQueue[int]()
 	assert.NoError(t, queue.Enqueue(1))
 	assert.NoError(t, queue.Enqueue(2))
 	assert.NoError(t, queue.Enqueue(3))
@@ -195,8 +195,8 @@ func Test_DefaultQueue_DequeueIf(t *testing.T) {
 	assert.Equal(t, 3, v)
 }
 
-func Test_DefaultQueue_WaitDequeueIf(t *testing.T) {
-	queue := priorityqueue.NewDefaultQueue[int]()
+func Test_Queue_WaitDequeueIf(t *testing.T) {
+	queue := priorityqueue.NewQueue[int]()
 
 	go func() {
 		time.Sleep(500 * time.Millisecond)
@@ -235,8 +235,8 @@ func Test_DefaultQueue_WaitDequeueIf(t *testing.T) {
 	assert.Equal(t, int32(1), totalSuccess)
 }
 
-func Test_DefaultQueue_WaitDequeueIfRetrigger(t *testing.T) {
-	queue := priorityqueue.NewDefaultQueue[time.Time]()
+func Test_Queue_WaitDequeueIfRetrigger(t *testing.T) {
+	queue := priorityqueue.NewQueue[time.Time]()
 	assert.NoError(t, queue.Enqueue(time.Now().Add(200*time.Millisecond)))
 
 	ctx := context.Background()
@@ -256,8 +256,8 @@ func Test_DefaultQueue_WaitDequeueIfRetrigger(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func Test_DefaultQueue_WaitDequeueIfRetriggerButTimeout(t *testing.T) {
-	queue := priorityqueue.NewDefaultQueue[time.Time]()
+func Test_Queue_WaitDequeueIfRetriggerButTimeout(t *testing.T) {
+	queue := priorityqueue.NewQueue[time.Time]()
 	assert.NoError(t, queue.Enqueue(time.Now().Add(3*time.Second)))
 
 	ctx := context.Background()

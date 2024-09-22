@@ -1,12 +1,69 @@
 package priorityqueue
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
 )
 
-const DefaultMaxPriorityLevel = 1024
+const NoAging = time.Duration(0)
+const DefaultMaxPriorityLevel = 1000
+
+type Element[T any] struct {
+	value T
+
+	originalLevel    int
+	originalPriority any
+
+	level    int
+	priority any
+
+	createdAt time.Time
+}
+
+func newElement[T any](value T, level int, priority any) Element[T] {
+	return Element[T]{
+		value:            value,
+		level:            level,
+		priority:         priority,
+		originalLevel:    level,
+		originalPriority: priority,
+		createdAt:        time.Now(),
+	}
+}
+
+func (e Element[T]) To() T {
+	return e.value
+}
+
+func (e Element[T]) OriginalLevel() int {
+	return e.originalLevel
+}
+
+func (e Element[T]) OriginalPriority() any {
+	return e.originalPriority
+}
+
+func (e Element[T]) Level() int {
+	return e.level
+}
+
+func (e Element[T]) Priority() any {
+	return e.priority
+}
+
+func (e Element[T]) renew(level int, priority any) Element[T] {
+	return Element[T]{
+		value:            e.value,
+		level:            level,
+		priority:         priority,
+		originalLevel:    e.originalLevel,
+		originalPriority: e.originalPriority,
+		createdAt:        time.Now(),
+	}
+}
 
 type PriorityQueue[T any] struct {
 	mutex sync.RWMutex
@@ -14,52 +71,82 @@ type PriorityQueue[T any] struct {
 	level2priority []any
 	priority2level map[any]int
 
-	commonTimeSlice   time.Duration
-	specificTimeSlice map[any]time.Duration
+	commonAgingTimeSlice time.Duration
+	agingTimeSlice       map[any]time.Duration
 
 	mq *MultiLevelQueue[Element[T]]
+
+	lastAging               time.Time
+	agingInterval           time.Duration
+	autoDetectAgingInterval bool
 }
 
-func NewWithCustom[T any](maxPriorityLevel int, queuer func() Queuer[Element[T]]) *PriorityQueue[T] {
+func New[T any](maxPriorityLevel int, core *MultiLevelQueue[Element[T]]) *PriorityQueue[T] {
 	return &PriorityQueue[T]{
 		mutex: sync.RWMutex{},
 
-		level2priority: make([]any, maxPriorityLevel),
+		level2priority: make([]any, maxPriorityLevel+1),
 		priority2level: make(map[any]int),
 
-		commonTimeSlice:   0,
-		specificTimeSlice: make(map[any]time.Duration),
+		commonAgingTimeSlice: 0,
+		agingTimeSlice:       make(map[any]time.Duration),
 
-		mq: newMultilevelQueue[Element[T]](queuer),
+		mq: core,
+
+		lastAging:               time.Now(),
+		agingInterval:           -1,
+		autoDetectAgingInterval: true,
 	}
 }
 
-func New[T any]() *PriorityQueue[T] {
-	return NewWithCustom(
+func Default[T any]() *PriorityQueue[T] {
+	return New(
 		DefaultMaxPriorityLevel,
-		func() Queuer[Element[T]] { return NewDefaultQueue[Element[T]]() },
+		DefaultMultiLevelQueue[Element[T]](),
 	)
 }
 
-func (pq *PriorityQueue[T]) SetCommonAging(timeslice time.Duration) error {
+func (pq *PriorityQueue[T]) SetCommonAgingTimeSlice(timeslice time.Duration) error {
 	pq.mutex.Lock()
 	defer pq.mutex.Unlock()
 
-	pq.commonTimeSlice = timeslice
+	pq.commonAgingTimeSlice = timeslice
+	if pq.autoDetectAgingInterval && timeslice > 0 && (timeslice < pq.agingInterval || pq.agingInterval < 0) {
+		pq.agingInterval = timeslice
+	}
 
 	return nil
 }
 
-func (pq *PriorityQueue[T]) SetSpecificAging(priority any, timeslice time.Duration) error {
+func (pq *PriorityQueue[T]) SetAgingTimeSlice(priority any, timeslice time.Duration) error {
+	if !pq.HasPriority(priority) {
+		return fmt.Errorf("%w: priority %v", ErrNotExistedLevel, priority)
+	}
+
 	pq.mutex.Lock()
 	defer pq.mutex.Unlock()
 
-	pq.specificTimeSlice[priority] = timeslice
+	pq.agingTimeSlice[priority] = timeslice
+	if pq.autoDetectAgingInterval && timeslice > 0 && (timeslice < pq.agingInterval || pq.agingInterval < 0) {
+		pq.agingInterval = timeslice
+	}
 
 	return nil
+}
+
+func (pq *PriorityQueue[T]) SetAgingInterval(interval time.Duration) {
+	pq.mutex.Lock()
+	defer pq.mutex.Unlock()
+
+	pq.agingInterval = interval
+	pq.autoDetectAgingInterval = false
 }
 
 func (pq *PriorityQueue[T]) SetPriority(priority any, level int) error {
+	if level >= len(pq.level2priority) {
+		panic(fmt.Sprintf("exceed maxmium value of level (%d)", len(pq.level2priority)))
+	}
+
 	if pq.HasLevel(level) {
 		return fmt.Errorf("%w: %d", ErrExistedLevel, level)
 	}
@@ -73,8 +160,7 @@ func (pq *PriorityQueue[T]) SetPriority(priority any, level int) error {
 
 	pq.level2priority[level] = priority
 	pq.priority2level[priority] = level
-
-	return nil
+	return pq.mq.AddLevel(priority)
 }
 
 func (pq *PriorityQueue[T]) HasPriority(priority any) bool {
@@ -92,37 +178,169 @@ func (pq *PriorityQueue[T]) HasLevel(level int) bool {
 	return pq.level2priority[level] != nil
 }
 
-func (pq *PriorityQueue[T]) Enqueue(priority any, value T) error {
+func (pq *PriorityQueue[T]) Enqueue(priority any, values ...T) error {
 	if !pq.HasPriority(priority) {
 		return fmt.Errorf("%w: not found priority %d", ErrNotExistedLevel, priority)
 	}
 
-	return pq.mq.Enqueue(
-		priority,
-		newElement(
-			value,
-			pq.priority2level[priority],
-			priority,
-		),
-	)
+	if err := pq.aging(); err != nil {
+		return err
+	}
+
+	elements := []Element[T]{}
+	for i := range values {
+		elements = append(elements, newElement(values[i], pq.priority2level[priority], priority))
+	}
+
+	return pq.mq.Enqueue(priority, elements...)
 }
 
 func (pq *PriorityQueue[T]) Dequeue() (Element[T], error) {
 	var defaultElement Element[T]
+
+	if err := pq.aging(); err != nil {
+		return defaultElement, fmt.Errorf("%w: %w", ErrAging, err)
+	}
+
 	for _, priority := range pq.level2priority {
 		if priority == nil {
 			continue
 		}
 
-		l, err := pq.mq.Length(priority)
+		element, err := pq.mq.Dequeue(priority)
 		if err != nil {
-			return defaultElement, err
+			if !errors.Is(err, ErrEmpty) {
+				return defaultElement, err
+			}
+
+			continue
 		}
 
-		if l > 0 {
-			return pq.mq.Dequeue(priority)
-		}
+		return element, nil
 	}
 
 	return defaultElement, ErrEmpty
+}
+
+func (pq *PriorityQueue[T]) JustDequeue() *Element[T] {
+	v, err := pq.Dequeue()
+	if err == nil {
+		return &v
+	}
+
+	if errors.Is(err, ErrEmpty) {
+		return nil
+	}
+
+	panic(err)
+}
+
+func (pq *PriorityQueue[T]) WaitDequeue(ctx context.Context) (Element[T], error) {
+	v, err := pq.Dequeue()
+	if !errors.Is(err, ErrEmpty) {
+		return v, err
+	}
+
+	return pq.mq.WaitDequeueAll(ctx)
+}
+
+func (pq *PriorityQueue[T]) JustWaitDequeue(ctx context.Context) *Element[T] {
+	v, err := pq.WaitDequeue(ctx)
+	if err == nil {
+		return &v
+	}
+
+	if errors.Is(err, ErrEmpty) || errors.Is(err, ErrTimeout) {
+		return nil
+	}
+
+	panic(err)
+}
+
+func (pq *PriorityQueue[T]) ForceAging() error {
+	pq.mutex.Lock()
+	pq.lastAging = time.Date(0, 0, 0, 0, 0, 0, 0, time.UTC)
+	pq.mutex.Unlock()
+
+	return pq.aging()
+}
+
+func (pq *PriorityQueue[T]) Length(priority any) int {
+	return pq.mq.Length(priority)
+}
+
+func (pq *PriorityQueue[T]) TotalLength() int {
+	return pq.mq.TotalLength()
+}
+
+func (pq *PriorityQueue[T]) aging() error {
+	defer func() {
+		pq.mutex.Lock()
+		defer pq.mutex.Unlock()
+
+		pq.lastAging = time.Now()
+	}()
+
+	pq.mutex.RLock()
+	lastAging := pq.lastAging
+	pq.mutex.RUnlock()
+
+	if pq.agingInterval < 0 || time.Now().Before(lastAging.Add(pq.agingInterval)) {
+		return nil
+	}
+
+	for level := len(pq.level2priority) - 1; level > 0; level-- {
+		priority := pq.level2priority[level]
+
+		if priority == nil {
+			continue
+		}
+
+		timeslice := pq.commonAgingTimeSlice
+		if value, ok := pq.agingTimeSlice[priority]; ok {
+			timeslice = value
+		}
+
+		if timeslice <= 0 {
+			continue
+		}
+
+		higherPriority := pq.findHigherPriority(priority)
+		if higherPriority == nil {
+			break
+		}
+
+		higherLevel := pq.priority2level[higherPriority]
+
+		for {
+			element, err := pq.mq.DequeueIf(priority, func(e Element[T]) (bool, error) {
+				return time.Now().After(e.createdAt.Add(timeslice)), nil
+			})
+
+			if errors.Is(err, ErrEmpty) || errors.Is(err, ErrNotMeetCondition) {
+				break
+			}
+
+			if err := pq.mq.Enqueue(higherPriority, element.renew(higherLevel, higherPriority)); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func (pq *PriorityQueue[T]) findHigherPriority(priority any) any {
+	level, ok := pq.priority2level[priority]
+	if !ok {
+		panic("not found priority")
+	}
+
+	for i := level - 1; i >= 0; i-- {
+		if pq.level2priority[i] != nil {
+			return pq.level2priority[i]
+		}
+	}
+
+	return nil
 }
