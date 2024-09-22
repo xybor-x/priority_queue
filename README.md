@@ -1,3 +1,4 @@
+[![Codacy Badge](https://api.codacy.com/project/badge/Grade/372edbb9422b402b8e3d66df6da26099)](https://app.codacy.com/gh/xybor-x/priority_queue?utm_source=github.com&utm_medium=referral&utm_content=xybor-x/priority_queue&utm_campaign=Badge_Grade)
 [![xybor founder](https://img.shields.io/badge/xybor-huykingsofm-red)](https://github.com/huykingsofm)
 [![Go Reference](https://pkg.go.dev/badge/github.com/xybor-x/priority_queue.svg)](https://pkg.go.dev/github.com/xybor-x/priority_queue)
 [![GitHub Repo stars](https://img.shields.io/github/stars/xybor-x/priority_queue?color=yellow)](https://github.com/xybor-x/priority_queue)
