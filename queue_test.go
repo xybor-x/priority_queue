@@ -150,7 +150,7 @@ func Test_Queue_MultipleWaitDequeue(t *testing.T) {
 	wg := sync.WaitGroup{}
 	totalSuccess := int32(0)
 
-	for i := range 3 {
+	for i := 0; i < 3; i++ {
 		wg.Add(1)
 		go func(index int) {
 			defer wg.Done()
@@ -207,7 +207,7 @@ func Test_Queue_WaitDequeueIf(t *testing.T) {
 	wg := sync.WaitGroup{}
 	totalSuccess := int32(0)
 
-	for i := range 3 {
+	for i := 0; i < 3; i++ {
 		wg.Add(1)
 		go func(index int) {
 			defer wg.Done()
