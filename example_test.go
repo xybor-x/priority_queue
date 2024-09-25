@@ -94,7 +94,7 @@ func Test_Example_WaitDequeue(t *testing.T) {
 	assert.ErrorIs(t, err, priorityqueue.ErrTimeout)
 
 	// JustWaitDequeue also returns nil if the queue is empty and timeout.
-	ctx = context.WithoutCancel(ctx)
+	ctx = context.Background()
 	ctx, cancel = context.WithTimeout(ctx, 100*time.Millisecond)
 	defer cancel()
 	assert.Nil(t, pqueue.JustWaitDequeue(ctx))
@@ -104,7 +104,7 @@ func Test_Example_WaitDequeue(t *testing.T) {
 		pqueue.Enqueue(Lazy, 4)
 	}()
 
-	ctx = context.WithoutCancel(ctx)
+	ctx = context.Background()
 	ctx, cancel = context.WithTimeout(ctx, 200*time.Millisecond)
 	defer cancel()
 	assert.Equal(t, 4, pqueue.JustWaitDequeue(ctx).To())

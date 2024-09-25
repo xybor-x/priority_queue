@@ -199,7 +199,7 @@ func (pq *PriorityQueue[T]) Dequeue() (Element[T], error) {
 	var defaultElement Element[T]
 
 	if err := pq.aging(); err != nil {
-		return defaultElement, fmt.Errorf("%w: %w", ErrAging, err)
+		return defaultElement, fmt.Errorf("failed to aging: %w", err)
 	}
 
 	for _, priority := range pq.level2priority {
