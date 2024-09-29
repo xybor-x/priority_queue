@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"slices"
+	"sort"
 	"sync"
 	"time"
 )
@@ -183,7 +183,7 @@ func (pq *PriorityQueue[T]) SetPriority(priority any, level int) error {
 	pq.priority2level[priority] = level
 
 	pq.sortedLevels = append(pq.sortedLevels, level)
-	slices.Sort(pq.sortedLevels)
+	sort.Ints(pq.sortedLevels)
 
 	return pq.mq.AddLevel(priority)
 }
