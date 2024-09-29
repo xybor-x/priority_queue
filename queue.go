@@ -73,9 +73,11 @@ type Queuer[T any] interface {
 	Length() int
 }
 
-// DefaultQueue implementation.
+// Ensure Queuer implementation.
 var _ Queuer[int] = (*Queue[int])(nil)
 
+// Queue is a default implementation of Queuer. It is a wrapper of slice. It
+// uses mutex to keep the queue thread-safe.
 type Queue[T any] struct {
 	mutex sync.RWMutex
 	queue []T
@@ -83,6 +85,7 @@ type Queue[T any] struct {
 	wakeupCh chan any
 }
 
+// NewQueue returns an empty Queue.
 func NewQueue[T any]() *Queue[T] {
 	return &Queue[T]{
 		mutex:    sync.RWMutex{},
@@ -91,6 +94,7 @@ func NewQueue[T any]() *Queue[T] {
 	}
 }
 
+// Enqueue pushes some elements into the end of queue.
 func (q *Queue[T]) Enqueue(obj ...T) error {
 	q.mutex.Lock()
 	defer func() {
@@ -102,6 +106,7 @@ func (q *Queue[T]) Enqueue(obj ...T) error {
 	return nil
 }
 
+// DequeueIf pops the first element in queue if it satifies the condition.
 func (q *Queue[T]) DequeueIf(cond func(t T) (bool, error)) (T, error) {
 	q.mutex.Lock()
 	defer q.mutex.Unlock()
@@ -128,10 +133,12 @@ func (q *Queue[T]) DequeueIf(cond func(t T) (bool, error)) (T, error) {
 	return v, nil
 }
 
+// Dequeue pops the first element of queue.
 func (q *Queue[T]) Dequeue() (T, error) {
 	return q.DequeueIf(nil)
 }
 
+// WaitDequeueIf is the blocking version of DequeueIf.
 func (q *Queue[T]) WaitDequeueIf(
 	ctx context.Context,
 	cond func(t T) (bool, error),
@@ -164,10 +171,12 @@ func (q *Queue[T]) WaitDequeueIf(
 	}
 }
 
+// WaitDequeue is the blocking-version of Dequeue.
 func (q *Queue[T]) WaitDequeue(ctx context.Context) (T, error) {
 	return q.WaitDequeueIf(ctx, nil, nil)
 }
 
+// Front returns the first element of queue without popping it out.
 func (q *Queue[T]) Front() (T, error) {
 	q.mutex.RLock()
 	defer q.mutex.RUnlock()
@@ -180,6 +189,7 @@ func (q *Queue[T]) Front() (T, error) {
 	return q.queue[0], nil
 }
 
+// Back returns the last element of queue without popping it out.
 func (q *Queue[T]) Back() (T, error) {
 	q.mutex.RLock()
 	defer q.mutex.RUnlock()
@@ -192,6 +202,7 @@ func (q *Queue[T]) Back() (T, error) {
 	return q.queue[len(q.queue)-1], nil
 }
 
+// Clear removes all elements in the queue.
 func (q *Queue[T]) Clear() {
 	q.mutex.Lock()
 	defer q.mutex.Unlock()
@@ -199,6 +210,7 @@ func (q *Queue[T]) Clear() {
 	q.queue = make([]T, 0)
 }
 
+// Length returns the number of elements in the queue.
 func (q *Queue[T]) Length() int {
 	q.mutex.RLock()
 	defer q.mutex.RUnlock()

@@ -8,6 +8,7 @@ import (
 	"time"
 )
 
+// MultiLevelQueue is a queue supporting multiple inner queues.
 type MultiLevelQueue[T any] struct {
 	mutex sync.RWMutex
 
@@ -19,6 +20,7 @@ type MultiLevelQueue[T any] struct {
 	totalLength int32
 }
 
+// NewMultiLevelQueue returns an empty MultiLevelQueue with a customized Queuer.
 func NewMultiLevelQueue[T any](queuer func() Queuer[T]) *MultiLevelQueue[T] {
 	return &MultiLevelQueue[T]{
 		mutex:       sync.RWMutex{},
@@ -28,12 +30,15 @@ func NewMultiLevelQueue[T any](queuer func() Queuer[T]) *MultiLevelQueue[T] {
 	}
 }
 
+// DefaultMultiLevelQueue returns an empty MultiLevelQueue with the default
+// inner Queue.
 func DefaultMultiLevelQueue[T any]() *MultiLevelQueue[T] {
 	return NewMultiLevelQueue(func() Queuer[T] {
 		return NewQueue[T]()
 	})
 }
 
+// AddLevel adds a new queue in MultiLevelQueue.
 func (mq *MultiLevelQueue[T]) AddLevel(level any) error {
 	// Pre-check
 	if mq.HasLevel(level) {
@@ -51,6 +56,7 @@ func (mq *MultiLevelQueue[T]) AddLevel(level any) error {
 	return nil
 }
 
+// HasLevel returns true if the level has existed in MultiLevelQueue.
 func (mq *MultiLevelQueue[T]) HasLevel(level any) bool {
 	mq.mutex.RLock()
 	defer mq.mutex.RUnlock()
@@ -59,6 +65,7 @@ func (mq *MultiLevelQueue[T]) HasLevel(level any) bool {
 	return ok
 }
 
+// Enqueue pushes some values into queue with a given level.
 func (mq *MultiLevelQueue[T]) Enqueue(level any, obj ...T) error {
 	// Pre-check
 	if !mq.HasLevel(level) {
@@ -73,6 +80,8 @@ func (mq *MultiLevelQueue[T]) Enqueue(level any, obj ...T) error {
 	return err
 }
 
+// DequeueIf returns the first element of a specific level queue if it sastifies
+// the condition.
 func (mq *MultiLevelQueue[T]) DequeueIf(level any, cond func(T) (bool, error)) (T, error) {
 	// Pre-check
 	var defaultT T
@@ -88,10 +97,13 @@ func (mq *MultiLevelQueue[T]) DequeueIf(level any, cond func(T) (bool, error)) (
 	return t, err
 }
 
+// Dequeue returns the first element of a specific queue.
 func (mq *MultiLevelQueue[T]) Dequeue(level any) (T, error) {
 	return mq.DequeueIf(level, nil)
 }
 
+// WaitDequeueIf returns the first element of a specific queue if it sastifies
+// the condition. It blocks the current process if the queue is empty.
 func (mq *MultiLevelQueue[T]) WaitDequeueIf(
 	ctx context.Context,
 	level any,
@@ -113,6 +125,8 @@ func (mq *MultiLevelQueue[T]) WaitDequeueIf(
 	return t, err
 }
 
+// WaitDequeueIf returns the first element of a specific queue. It blocks the
+// current process if the queue is empty.
 func (mq *MultiLevelQueue[T]) WaitDequeue(ctx context.Context, level any) (T, error) {
 	return mq.WaitDequeueIf(ctx, level, nil, nil)
 }
@@ -161,6 +175,7 @@ func (mq *MultiLevelQueue[T]) WaitDequeueAll(ctx context.Context) (T, error) {
 	}
 }
 
+// Length returns the number of elements with a given level.
 func (mq *MultiLevelQueue[T]) Length(level any) int {
 	if !mq.HasLevel(level) {
 		return 0
@@ -169,6 +184,7 @@ func (mq *MultiLevelQueue[T]) Length(level any) int {
 	return mq.queues[level].Length()
 }
 
+// TotalLength returns the number of elements in MultiLevelQueue.
 func (mq *MultiLevelQueue[T]) TotalLength() int {
 	return int(mq.totalLength)
 }
