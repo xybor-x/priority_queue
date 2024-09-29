@@ -76,7 +76,7 @@ func Test_PriorityQueue_Aging(t *testing.T) {
 	assert.NoError(t, queue.SetPriority(PriorityHigh, 0))
 	assert.NoError(t, queue.SetPriority(PriorityMedium, 1))
 	assert.NoError(t, queue.SetPriority(PriorityLow, 2))
-	assert.NoError(t, queue.SetCommonAgingTimeSlice(500*time.Millisecond))
+	assert.NoError(t, queue.SetDefaultAgingTimeSlice(500*time.Millisecond))
 	assert.NoError(t, queue.SetAgingTimeSlice(PriorityMedium, 100*time.Millisecond))
 
 	assert.NoError(t, queue.Enqueue(PriorityLow, 1))
