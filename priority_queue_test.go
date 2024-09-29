@@ -57,7 +57,6 @@ func Test_PriorityQueue_SetInvalidPriorityLevel(t *testing.T) {
 
 	assert.ErrorIs(t, queue.SetPriority(PriorityHigh, 1), priorityqueue.ErrExistedLevel)
 	assert.ErrorIs(t, queue.SetPriority(PriorityMedium, 0), priorityqueue.ErrExistedLevel)
-	assert.Panics(t, func() { queue.SetPriority(PriorityLow, priorityqueue.DefaultMaxPriorityLevel+1) })
 }
 
 func Test_PriorityQueue_EnqueueAnInvalidPriority(t *testing.T) {

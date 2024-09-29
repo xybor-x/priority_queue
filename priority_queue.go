@@ -4,12 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
 	"time"
 )
 
 const NoAging = time.Duration(0)
-const DefaultMaxPriorityLevel = 1024
 
 // Element is a wrapper of an element in priority queue. It contains some
 // metadata.
@@ -76,7 +76,8 @@ func (e Element[T]) renew(level int, priority any) Element[T] {
 type PriorityQueue[T any] struct {
 	mutex sync.RWMutex
 
-	level2priority []any
+	sortedLevels   []int
+	level2priority map[int]any
 	priority2level map[any]int
 
 	commonAgingTimeSlice time.Duration
@@ -90,11 +91,12 @@ type PriorityQueue[T any] struct {
 }
 
 // New returns an empty PriorityQueue with the customized metadata.
-func New[T any](maxPriorityLevel int, core *MultiLevelQueue[Element[T]]) *PriorityQueue[T] {
+func New[T any](core *MultiLevelQueue[Element[T]]) *PriorityQueue[T] {
 	return &PriorityQueue[T]{
 		mutex: sync.RWMutex{},
 
-		level2priority: make([]any, maxPriorityLevel+1),
+		sortedLevels:   make([]int, 0),
+		level2priority: make(map[int]any),
 		priority2level: make(map[any]int),
 
 		commonAgingTimeSlice: 0,
@@ -111,7 +113,6 @@ func New[T any](maxPriorityLevel int, core *MultiLevelQueue[Element[T]]) *Priori
 // Default returns an empty PriorityQueue with the default MultiLevelQueue.
 func Default[T any]() *PriorityQueue[T] {
 	return New(
-		DefaultMaxPriorityLevel,
 		DefaultMultiLevelQueue[Element[T]](),
 	)
 }
@@ -167,10 +168,6 @@ func (pq *PriorityQueue[T]) SetAgingInterval(interval time.Duration) {
 
 // SetPriority assigns a new Priority with a level value.
 func (pq *PriorityQueue[T]) SetPriority(priority any, level int) error {
-	if level >= len(pq.level2priority) {
-		panic(fmt.Sprintf("exceed maxmium value of level (%d)", len(pq.level2priority)))
-	}
-
 	if pq.HasLevel(level) {
 		return fmt.Errorf("%w: %d", ErrExistedLevel, level)
 	}
@@ -184,6 +181,10 @@ func (pq *PriorityQueue[T]) SetPriority(priority any, level int) error {
 
 	pq.level2priority[level] = priority
 	pq.priority2level[priority] = level
+
+	pq.sortedLevels = append(pq.sortedLevels, level)
+	slices.Sort(pq.sortedLevels)
+
 	return pq.mq.AddLevel(priority)
 }
 
@@ -231,7 +232,8 @@ func (pq *PriorityQueue[T]) Dequeue() (Element[T], error) {
 		return defaultElement, fmt.Errorf("failed to aging: %w", err)
 	}
 
-	for _, priority := range pq.level2priority {
+	for _, level := range pq.sortedLevels {
+		priority := pq.level2priority[level]
 		if priority == nil {
 			continue
 		}
@@ -327,7 +329,8 @@ func (pq *PriorityQueue[T]) aging() error {
 		return nil
 	}
 
-	for level := len(pq.level2priority) - 1; level > 0; level-- {
+	for i := len(pq.sortedLevels) - 1; i >= 0; i-- {
+		level := pq.sortedLevels[i]
 		priority := pq.level2priority[level]
 
 		if priority == nil {
@@ -374,9 +377,9 @@ func (pq *PriorityQueue[T]) findHigherPriority(priority any) any {
 		panic("not found priority")
 	}
 
-	for i := level - 1; i >= 0; i-- {
-		if pq.level2priority[i] != nil {
-			return pq.level2priority[i]
+	for i := len(pq.sortedLevels) - 1; i >= 1; i-- {
+		if pq.sortedLevels[i] == level {
+			return pq.level2priority[pq.sortedLevels[i-1]]
 		}
 	}
 
