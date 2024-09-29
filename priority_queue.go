@@ -9,7 +9,7 @@ import (
 )
 
 const NoAging = time.Duration(0)
-const DefaultMaxPriorityLevel = 1000
+const DefaultMaxPriorityLevel = 1024
 
 // Element is a wrapper of an element in priority queue. It contains some
 // metadata.
